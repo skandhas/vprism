@@ -6,5 +6,4 @@
 *.dylib
 *.tmp.c
 .vmodules/
-vprism
 work/
