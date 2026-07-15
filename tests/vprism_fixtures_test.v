@@ -2,6 +2,7 @@ module tests
 
 import os
 import vprism
+import vprism.analysis
 import vprism.ast
 import vprism.serialize
 
@@ -92,6 +93,58 @@ fn test_vprism_valid_fixtures_decode_and_walk() {
 	}
 }
 
+// test_vprism_parse_file_and_stream_file_facades checks file-based parsing facades.
+fn test_vprism_parse_file_and_stream_file_facades() {
+	path := fixture_path('valid', 'basic.rb')
+	source := read_fixture('valid', 'basic.rb')
+	parsed := vprism.parse_file(path)!
+	streamed := vprism.parse_stream_file(path)!
+
+	assert vprism.is_valid_file(path)!
+	assert parsed.source == source
+	assert streamed.source == source
+	assert parsed.metadata.errors.len == 0
+	assert streamed.metadata.errors.len == 0
+	assert parsed.root.base().kind == streamed.root.base().kind
+	assert parsed.node_text(parsed.root)! == streamed.node_text(streamed.root)!
+}
+
+// test_vprism_parse_options_validate_and_affect_metadata checks public parse options.
+fn test_vprism_parse_options_validate_and_affect_metadata() {
+	source := read_fixture('valid', 'basic.rb')
+	result := vprism.parse_with_options(source, vprism.ParseOptions{
+		filepath: 'owned/basic.rb'
+		line:     42
+		encoding: 'UTF-8'
+		version:  .ruby_3_3
+	})!
+
+	assert result.metadata.start_line == 42
+	assert result.metadata.encoding == 'UTF-8'
+	assert vprism.is_valid_with_options(source, vprism.ParseOptions{
+		line:    42
+		version: .ruby_3_4
+	})!
+
+	if _ := vprism.parse_with_options(source, vprism.ParseOptions{
+		line: 0
+	})
+	{
+		assert false
+	} else {
+		assert err.msg().contains('line')
+	}
+
+	if _ := vprism.is_valid_with_options(source, vprism.ParseOptions{
+		command_line: 'z'
+	})
+	{
+		assert false
+	} else {
+		assert err.msg().contains('unsupported command-line')
+	}
+}
+
 // test_vprism_invalid_fixture_reports_diagnostics checks diagnostic decoding for owned invalid source.
 fn test_vprism_invalid_fixture_reports_diagnostics() {
 	source := read_fixture('invalid', 'unterminated_def.rb')
@@ -106,6 +159,34 @@ fn test_vprism_invalid_fixture_reports_diagnostics() {
 	assert first.message.len > 0
 	assert first.location.start_offset <= u32(source.len)
 	assert first.location.length <= u32(source.len)
+}
+
+// test_vprism_debug_and_query_facades checks Prism debug dumps and string query wrappers.
+fn test_vprism_debug_and_query_facades() {
+	source := read_fixture('valid', 'basic.rb')
+	path := fixture_path('valid', 'basic.rb')
+	json := vprism.dump_json(source)!
+	json_with_options := vprism.dump_json_with_options(source, vprism.ParseOptions{
+		line: 7
+	})!
+	file_json := vprism.dump_json_file(path)!
+	pretty := vprism.prettyprint(source)!
+	file_pretty := vprism.prettyprint_file(path)!
+
+	assert vprism.prism_version().len > 0
+	assert json.starts_with('{')
+	assert json.contains('ProgramNode')
+	assert json_with_options.contains('ProgramNode')
+	assert file_json.contains('ProgramNode')
+	assert pretty.contains('ProgramNode')
+	assert file_pretty.contains('ProgramNode')
+
+	assert vprism.is_local_name('local_name')!
+	assert !vprism.is_local_name('User')!
+	assert vprism.is_constant_name('User')!
+	assert !vprism.is_constant_name('local_name')!
+	assert vprism.is_method_name('active?')!
+	assert vprism.is_method_name('[]=')!
 }
 
 // test_vprism_lex_fixture_checks_token_locations checks lex and parse+lex owned fixtures.
@@ -158,6 +239,112 @@ fn test_vprism_comments_fixture_checks_comments_and_magic_comments() {
 
 	assert parsed.metadata.data_loc.has_value
 	assert parsed.source_text(parsed.metadata.data_loc.value)!.starts_with('__END__')
+}
+
+// test_vprism_comments_file_and_options_facades checks comments-only public facades.
+fn test_vprism_comments_file_and_options_facades() {
+	source := read_fixture('comments', 'magic_and_inline.rb')
+	path := fixture_path('comments', 'magic_and_inline.rb')
+	comments := vprism.parse_comments_with_options(source, vprism.ParseOptions{
+		line: 20
+	})!
+	file_comments := vprism.parse_comments_file(path)!
+
+	assert comments.source == source
+	assert comments.start_line == 20
+	assert comments.encoding == 'UTF-8'
+	assert comments.comments.len == file_comments.comments.len
+	assert file_comments.source == source
+	assert file_comments.text(file_comments.comments[0])! == '# frozen_string_literal: true'
+}
+
+// test_vprism_analysis_structure_fixture_checks_high_level_api checks structural analysis APIs.
+fn test_vprism_analysis_structure_fixture_checks_high_level_api() {
+	source := read_fixture('analysis', 'structure.rb')
+	parsed := vprism.parse(source)!
+	analyzer := vprism.new_analyzer(parsed)
+	modules := analyzer.modules()
+	classes := analyzer.classes()
+	methods := analyzer.methods()
+	dependencies := analyzer.dependencies()
+	constants := analyzer.constants()
+	variables := analyzer.variables()
+	aliases := analyzer.aliases()
+	undefs := analyzer.undefs()
+
+	assert modules.any(it.name == 'App' && it.constant_path == 'App')
+	assert classes.any(it.name == 'User')
+	assert methods.any(it.name == 'initialize')
+	assert methods.any(it.name == 'token')
+	assert dependencies.any(it.kind == .require_ && it.path == 'json' && !it.dynamic)
+	assert dependencies.any(it.kind == .require_relative && it.path == 'support/user' && !it.dynamic)
+	assert dependencies.any(it.kind == .load && it.dynamic)
+	assert dependencies.any(it.kind == .autoload && it.constant_name == 'Worker'
+		&& it.path == 'app/worker')
+	assert constants.any(it.name == 'ROLE' && it.usage == .write)
+	assert constants.any(it.name == 'App' && it.usage == .declaration)
+	assert variables.any(it.name == '@name' && it.kind == .instance && it.usage == .write)
+	assert variables.any(it.name == '@active' && it.kind == .instance && it.usage == .write)
+	assert aliases.any(it.kind == .method && it.new_name.name == 'new_token'
+		&& it.old_name.name == 'token')
+	assert undefs.any(it.names.any(it.name == 'old_token'))
+
+	user_class := classes.filter(it.name == 'User')[0]
+	assert user_class.superclass != none
+	assert user_class.methods.any(it.name == 'initialize' && it.parameters.len >= 4)
+	assert user_class.methods.any(it.name == 'token'
+		&& it.visibility == analysis.MethodVisibility.private_)
+
+	return_node := parsed.find_first(.return_) or {
+		assert false
+		return
+	}
+	scopes := analyzer.scope_path(return_node)!
+
+	assert scopes.any(it.kind == .module_ && it.name == 'App')
+	assert scopes.any(it.kind == .class_ && it.name == 'User')
+	assert scopes.any(it.kind == .method && it.name == 'token')
+
+	if owner_class := analyzer.enclosing_class(return_node) {
+		assert owner_class.name == 'User'
+	} else {
+		assert false
+	}
+
+	if owner_module := analyzer.enclosing_module(return_node) {
+		assert owner_module.name == 'App'
+	} else {
+		assert false
+	}
+
+	if owner_method := analyzer.enclosing_method(return_node) {
+		assert owner_method.name == 'token'
+	} else {
+		assert false
+	}
+}
+
+// test_vprism_analysis_control_exception_fixture_checks_flow_api checks flow and exception APIs.
+fn test_vprism_analysis_control_exception_fixture_checks_flow_api() {
+	source := read_fixture('analysis', 'control_exception.rb')
+	analyzer := vprism.new_analyzer(vprism.parse(source)!)
+	flows := analyzer.control_flows()
+	methods := analyzer.methods()
+	regions := analyzer.exception_regions()
+	rescues := analyzer.rescues()
+
+	assert flows.any(it.kind == .next_)
+	assert flows.any(it.kind == .break_)
+	assert flows.any(it.kind == .yield_)
+	assert flows.any(it.kind == .return_)
+	assert flows.any(it.kind == .super_)
+	assert methods.any(it.name == 'flow' && it.control_flows.any(it.kind == .return_))
+	assert regions.len == 1
+	assert regions[0].rescues.len == 1
+	assert regions[0].else_body != none
+	assert regions[0].ensure_body != none
+	assert rescues.any(it.modifier)
+	assert rescues.any(!it.modifier && it.exceptions.len == 1 && it.reference != none)
 }
 
 // test_vprism_source_fixture_checks_utf8_and_start_line_mapping checks source mapping helpers.
