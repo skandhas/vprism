@@ -1,0 +1,10 @@
+*.exe
+*.o
+*.obj
+*.dll
+*.so
+*.dylib
+*.tmp.c
+.vmodules/
+vprism
+work/
