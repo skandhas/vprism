@@ -1,35 +1,60 @@
 # vprism
 
-`vprism` is a V package for parsing Ruby source through
-[Ruby Prism](https://github.com/ruby/prism) and rebuilding the serialized AST as
-V data structures.
+`vprism` parses Ruby source through [Ruby Prism](https://github.com/ruby/prism)
+and decodes Prism's serialized AST into V data structures.
+
+It vendors Prism's C sources, so the default V build compiles Prism together
+with the package. No separate Prism shared library is required.
 
 ## Pre-release Status
 
-`vprism` 0.1.0-pre.1 is a GitHub preview release. It is intended for early
-testing and integration feedback before the stable 0.1.0 tag. Public APIs may
-still change while the parser wrapper, serialized result models, generated AST,
-and single-file analysis layer settle.
+`vprism` 0.1.0-pre.1 is a GitHub preview release for early testing and
+integration feedback before the stable 0.1.0 tag.
 
-The public entry point parses Ruby source through Prism and returns a canonical,
-strongly typed AST:
+Public APIs may still change while the parser wrapper, serialized result
+models, generated AST, and single-file analysis layer settle.
+
+## Quick Start
 
 ```v
 import vprism
 
 result := vprism.parse('puts "hello"')!
+
+println(result.root.base().kind)
 println(result.root)
 ```
 
-Parser options use a V configuration struct:
+Parse a Ruby file:
+
+```v
+result := vprism.parse_file('lib/example.rb')!
+
+for diagnostic in result.metadata.errors {
+	println('${diagnostic.kind}: ${diagnostic.message}')
+}
+```
+
+Use parser options:
 
 ```v
 result := vprism.parse_with_options(source, vprism.ParseOptions{
 	filepath: 'lib/example.rb'
 	line: 10
+	encoding: 'UTF-8'
 	version: .ruby_3_4
 })!
+```
 
+## Core APIs
+
+### Parsing
+
+`parse` and `parse_file` call Prism's serialized parse API and decode the
+returned byte stream into `vprism.ParseResult`.
+
+```v
+result := vprism.parse(source)!
 file_result := vprism.parse_file('lib/example.rb')!
 ```
 
@@ -37,10 +62,9 @@ Files can also be parsed through Prism's stream parser:
 
 ```v
 stream_result := vprism.parse_stream_file('lib/example.rb')!
-stream_analyzer := vprism.new_analyzer(stream_result)
 ```
 
-Fast syntax checks use Prism's `pm_parse_success_p` without decoding the AST:
+Fast syntax checks use Prism's parse-success API without decoding the AST:
 
 ```v
 if vprism.is_valid(source)! {
@@ -48,28 +72,82 @@ if vprism.is_valid(source)! {
 }
 ```
 
-Lexer APIs use Prism's `pm_serialize_lex` and `pm_serialize_parse_lex`:
+### AST Access
+
+`ParseResult.root` is a strongly typed `ast.Node` sum type. Use `find_first`,
+`find_all`, and generated `as_*` accessors to work with concrete nodes.
+
+```v
+call_node := result.find_first(.call) or { return }
+call := call_node.as_call()!
+
+println(result.constant_value(call.name)!)
+
+if receiver := call.receiver {
+	println(result.node_text(receiver)!)
+}
+```
+
+AST nodes keep Prism source locations. `ParseResult` provides source text,
+line, and range helpers:
+
+```v
+text := result.node_text(call_node)!
+position := result.position_at(call_node.base().location.start_offset)!
+source_range := result.node_range(call_node)!
+line := result.line_text(position.line)!
+
+println('${source_range.start.line}:${source_range.start.column} ${text}')
+```
+
+### Walking
+
+Implement `ast.Visitor` to walk every node. The visitor receives `&ast.Node`,
+which avoids copying the sum type during traversal.
+
+```v
+import vprism.ast
+
+struct Counter {
+mut:
+	count int
+}
+
+fn (mut counter Counter) visit(node &ast.Node) ! {
+	counter.count++
+	node.base()
+}
+
+mut counter := Counter{}
+result.walk(mut counter)!
+println(counter.count)
+```
+
+### Lexing
+
+Lexer APIs use Prism's serialized lexer APIs and return token locations tied to
+the original source.
 
 ```v
 lexed := vprism.lex(source)!
 
 for token in lexed.tokens {
-	println('${token.kind}: ${lexed.text(token)!}')
-}
-
-parsed := vprism.parse_lex(source)!
-println(parsed.parse.root)
-```
-
-Token kinds expose Prism's official token type names:
-
-```v
-for token in lexed.tokens {
 	println('${token.kind.prism_name()}: ${lexed.text(token)!}')
 }
 ```
 
-Comment-only parsing uses Prism's `pm_serialize_parse_comments`:
+`parse_lex` returns both the decoded AST and tokens from the same Prism run:
+
+```v
+parsed := vprism.parse_lex(source)!
+
+println(parsed.parse.root.base().kind)
+println(parsed.tokens.len)
+```
+
+### Comments
+
+Comment-only parsing uses Prism's `pm_serialize_parse_comments` API.
 
 ```v
 comments := vprism.parse_comments(source)!
@@ -79,60 +157,78 @@ for comment in comments.comments {
 }
 ```
 
-Locations can be converted to one-based lines and byte columns:
+File and options variants are also available:
 
 ```v
-position := result.position_at(node.base().location.start_offset)!
-source_range := result.node_range(node)!
-line := result.line_text(position.line)!
+comments := vprism.parse_comments_file('lib/example.rb')!
+comments_with_options := vprism.parse_comments_with_options(source, vprism.ParseOptions{
+	line: 20
+})!
 ```
 
-Prism diagnostics and node flags are exposed as typed V values:
+Full parse results also include comments, magic comments, and `__END__`
+metadata:
+
+```v
+for magic in result.metadata.magic_comments {
+	println(result.source_text(magic.key_loc)!)
+	println(result.source_text(magic.value_loc)!)
+}
+```
+
+### Diagnostics
+
+Parser diagnostics are decoded into typed values.
 
 ```v
 for diagnostic in result.metadata.errors {
-	if diagnostic.kind == .err_def_name {
-		println(diagnostic.error_level()!)
+	if diagnostic.is_error() {
+		println('${diagnostic.error_level()!}: ${diagnostic.message}')
 	}
 }
 
-call := result.find_first(.call)!.as_call()!
-
-if call.has_flag(ast.call_node_safe_navigation) {
-	println('safe navigation')
+for warning in result.metadata.warnings {
+	if warning.is_warning() {
+		println('${warning.warning_level()!}: ${warning.message}')
+	}
 }
 ```
 
-Query helpers are available on both the parse result and AST nodes:
+### Debug Output
+
+Prism debug output is exposed for JSON and pretty-printed ASTs.
 
 ```v
-calls := result.find_all(.call)
-first_def := result.find_first(.def)
+println(vprism.dump_json(source)!)
+println(vprism.prettyprint(source)!)
+
+println(vprism.dump_json_file('lib/example.rb')!)
+println(vprism.prettyprint_file('lib/example.rb')!)
 ```
 
-Generated accessors expose each concrete node type:
+### Ruby Name Queries
+
+Ruby name queries wrap Prism's string query APIs.
 
 ```v
-call_node := result.find_first(.call)!
-call := call_node.as_call()!
-println(result.constant_value(call.name)!)
-
-if receiver := call.receiver {
-	println(result.node_text(receiver)!)
-}
+println(vprism.is_local_name('value')!)
+println(vprism.is_constant_name('Value')!)
+println(vprism.is_method_name('[]=')!)
 ```
 
-Concrete node fields directly contain `ast.Node`, `?ast.Node`, and `[]ast.Node`
-children. `AnalysisIndex` uses Prism node ids to resolve parents, ancestors, and
-lexical scopes without converting between AST models.
+## Single-file Analysis
 
-Higher-level Ruby analysis is provided by `analysis.Analyzer`. Parse with the
-root module, then construct analysis values through the root facade:
+`analysis.Analyzer` provides higher-level structural information for one parsed
+source. Construct it through the root facade:
 
 ```v
 parsed := vprism.parse(source)!
 analyzer := vprism.new_analyzer(parsed)
+```
 
+Inspect methods, calls, classes, and modules:
+
+```v
 for method in analyzer.methods() {
 	println('${method.visibility} ${method.name}')
 
@@ -159,26 +255,17 @@ for call in analyzer.calls() {
 
 for class_info in analyzer.classes() {
 	println('${class_info.constant_path}: ${class_info.methods.len} methods')
-
-	if superclass := class_info.superclass {
-		println('superclass: ${superclass.text}')
-	}
 }
 
 for module_info in analyzer.modules() {
 	println('${module_info.constant_path}: ${module_info.nested_definitions.len} definitions')
 }
+```
 
-for call in analyzer.calls() {
-	for scope in analyzer.scope_path(call.node)! {
-		println('${scope.kind}: ${scope.name}')
-	}
+Inspect constants, variables, dependencies, aliases, control flow, and exception
+regions:
 
-	if method := analyzer.enclosing_method(call.node) {
-		println('owned by method: ${method.name}')
-	}
-}
-
+```v
 for constant in analyzer.constants() {
 	println('${constant.usage}: ${constant.path}')
 }
@@ -191,16 +278,30 @@ for dependency in analyzer.dependencies() {
 	println('${dependency.kind}: ${dependency.path}')
 }
 
-for flow in analyzer.control_flows() {
-	println('${flow.kind}: ${flow.text}')
-}
-
 for alias_info in analyzer.aliases() {
 	println('${alias_info.new_name.name} -> ${alias_info.old_name.name}')
 }
 
+for flow in analyzer.control_flows() {
+	println('${flow.kind}: ${flow.text}')
+}
+
 for region in analyzer.exception_regions() {
 	println('${region.rescues.len} rescue clauses')
+}
+```
+
+Resolve lexical scope and AST parent information:
+
+```v
+for call in analyzer.calls() {
+	for scope in analyzer.scope_path(call.node)! {
+		println('${scope.kind}: ${scope.name}')
+	}
+
+	if method := analyzer.enclosing_method(call.node) {
+		println('owned by method: ${method.name}')
+	}
 }
 
 index := analyzer.analysis_index()
@@ -212,32 +313,83 @@ for call in analyzer.calls() {
 }
 ```
 
-Prism debug output is available for JSON and pretty-printed ASTs:
-
-```v
-println(vprism.dump_json(source)!)
-println(vprism.prettyprint(source)!)
-```
-
-Ruby name queries wrap Prism's string query APIs:
-
-```v
-println(vprism.is_local_name('value')!)
-println(vprism.is_constant_name('Value')!)
-println(vprism.is_method_name('[]=')!)
-```
-
 ## Scope
 
-`vprism` 0.1.0-pre.1 targets Ruby source parsing and single-file inspection. It
-supports Prism 1.9.0 serialized AST decoding, strongly typed V AST nodes,
-source locations, diagnostics, comments, lexing, debug output, token metadata,
-Ruby name queries, and high-level structural analysis for one parsed source.
+`vprism` 0.1.0-pre.1 targets Ruby source parsing and single-file inspection.
 
-`vprism` does not evaluate Ruby code, run Ruby programs, infer global Ruby
-types, resolve project-wide constants, load dependency graphs, or perform
-cross-file semantic analysis. Those capabilities are intended for higher-level
-packages or applications built on top of `vprism`.
+It currently provides:
+
+- Prism 1.9.0 C integration.
+- Serialized AST decoding into V data structures.
+- Strongly typed generated AST nodes.
+- Source text, line, and range helpers.
+- Parser diagnostics, comments, magic comments, and `__END__` metadata.
+- Lexing and parse+lex APIs.
+- Prism JSON and prettyprint debug output.
+- Ruby local, constant, and method name queries.
+- High-level structural analysis for one parsed source.
+
+It does not:
+
+- Evaluate Ruby code.
+- Run Ruby programs.
+- Infer global Ruby types.
+- Resolve project-wide constants.
+- Build cross-file dependency graphs.
+- Perform project-level semantic analysis.
+
+Those capabilities are intended for higher-level packages or applications built
+on top of `vprism`.
+
+## Examples
+
+Example programs live in `examples/`:
+
+```text
+examples/print_ast.v
+examples/parse_file.v
+examples/parse_stream_file.v
+examples/find_calls.v
+examples/dump_json.v
+examples/prettyprint.v
+examples/query_names.v
+```
+
+Run an example from the package root:
+
+```sh
+v run examples/print_ast.v
+v run examples/find_calls.v path/to/file.rb
+v run examples/dump_json.v path/to/file.rb
+```
+
+Compile an example:
+
+```sh
+v -o examples/dump_json.exe examples/dump_json.v
+```
+
+When using an unpublished checkout, make sure V can resolve the module. One
+simple local development option is to set `VMODULES` to this package's
+`.vmodules` directory:
+
+```sh
+VMODULES="$(pwd)/.vmodules" v run examples/print_ast.v
+```
+
+On Windows `cmd.exe`:
+
+```bat
+set VMODULES=%CD%\.vmodules
+v run examples\print_ast.v
+```
+
+On PowerShell:
+
+```powershell
+$env:VMODULES=(Resolve-Path .vmodules).Path
+v run examples\print_ast.v
+```
 
 ## Design
 
@@ -251,18 +403,6 @@ packages or applications built on top of `vprism`.
 - `tools/` contains maintainer tools, including the AST generator.
 
 Generated files are committed so VPM users do not need to run the generator.
-
-## Examples
-
-```text
-examples/parse_file.v
-examples/parse_stream_file.v
-examples/print_ast.v
-examples/find_calls.v
-examples/dump_json.v
-examples/prettyprint.v
-examples/query_names.v
-```
 
 ## Maintainer Checks
 
@@ -280,15 +420,16 @@ v run tools/check.v --quick
 
 ## Prism Library
 
-`vprism` vendors Prism's C headers and generated C sources under
-`thirdparty/prism/include` and `thirdparty/prism/src`. The V package compiles
-those C files together with the small shim in `ffi/prism_shim.c`, so the default
-build does not require a separate native Prism library.
+`vprism` vendors Prism's C headers and generated C sources under:
 
 ```text
 thirdparty/prism/include
 thirdparty/prism/src
 ```
+
+The V package compiles those C files together with the small shim in
+`ffi/prism_shim.c`. The C source list is declared in `ffi/prism.v` through V
+`#flag` directives.
 
 The Prism sources in `thirdparty/prism/src` are expected to include Prism's
 generated C files, such as `node.c`, `serialize.c`, `diagnostic.c`,
