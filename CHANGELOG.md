@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.0
+
+- First stable vprism release.
+- Parse Ruby source through the vendored Ruby Prism 1.9.0 C API.
+- Decode Prism serialized AST bytes into strongly typed V AST data structures.
+- Expose parse, stream parse, syntax check, lex, parse+lex, comments, debug, token, and Ruby name query APIs.
+- Provide source locations, diagnostics, constant pool access, node traversal, node search, and generated typed node accessors.
+- Provide single-source structural analysis for methods, classes, modules, calls, constants, variables, dependencies, control flow, aliases, undef, rescue, ensure, and lexical scope queries.
+- Keep project-level analysis, cross-file resolution, runtime behavior, and Ruby type inference outside the vprism core package.
+
 ## 0.1.0-pre.1
 
 - Initial pre-release for GitHub preview use.

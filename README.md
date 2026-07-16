@@ -6,13 +6,11 @@ and decodes Prism's serialized AST into V data structures.
 It vendors Prism's C sources, so the default V build compiles Prism together
 with the package. No separate Prism shared library is required.
 
-## Pre-release Status
+## Status
 
-`vprism` 0.1.0-pre.1 is a GitHub preview release for early testing and
-integration feedback before the stable 0.1.0 tag.
-
-Public APIs may still change while the parser wrapper, serialized result
-models, generated AST, and single-file analysis layer settle.
+`vprism` 0.1.0 is the first stable release of the package. It focuses on
+wrapping Prism's C parser APIs, decoding Prism serialized output, exposing a
+strongly typed V AST, and providing single-file structural analysis.
 
 ## Quick Start
 
@@ -315,7 +313,7 @@ for call in analyzer.calls() {
 
 ## Scope
 
-`vprism` 0.1.0-pre.1 targets Ruby source parsing and single-file inspection.
+`vprism` 0.1.0 targets Ruby source parsing and single-file inspection.
 
 It currently provides:
 

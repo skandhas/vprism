@@ -11,9 +11,9 @@ struct VPrismValidCase {
 	kinds []ast.NodeKind
 }
 
-// test_vprism_version_matches_pre_release checks the package pre-release version.
-fn test_vprism_version_matches_pre_release() {
-	assert vprism.version == '0.1.0-pre.1'
+// test_vprism_version_matches_release checks the package release version.
+fn test_vprism_version_matches_release() {
+	assert vprism.version == '0.1.0'
 }
 
 // fixture_path returns the path to a vprism-owned fixture.
