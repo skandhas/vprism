@@ -8,9 +8,9 @@ with the package. No separate Prism shared library is required.
 
 ## Status
 
-`vprism` 0.1.0 is the first stable release of the package. It focuses on
-wrapping Prism's C parser APIs, decoding Prism serialized output, exposing a
-strongly typed V AST, and providing single-file structural analysis.
+`vprism` a is package focused on wrapping Prism's C parser APIs, decoding
+Prism serialized output, exposing a strongly typed V AST, and providing
+single-file structural analysis.
 
 ## Quick Start
 
@@ -321,7 +321,7 @@ for call in analyzer.calls() {
 
 ## Scope
 
-`vprism` 0.1.0 targets Ruby source parsing and single-file inspection.
+`vprism` targets Ruby source parsing and single-file inspection.
 
 It currently provides:
 

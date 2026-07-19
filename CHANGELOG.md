@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1
+
+- Add V-style static constructors for `analysis.Analyzer` and `serialize.Reader`.
+- Keep `vprism.new_analyzer` as a root convenience facade.
+- Update analysis examples, tests, and README usage.
+- Refresh formatting with the current V formatter.
+
 ## 0.1.0
 
 - First stable vprism release.

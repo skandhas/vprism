@@ -13,7 +13,7 @@ struct VPrismValidCase {
 
 // test_vprism_version_matches_release checks the package release version.
 fn test_vprism_version_matches_release() {
-	assert vprism.version == '0.1.0'
+	assert vprism.version == '0.1.1'
 }
 
 // fixture_path returns the path to a vprism-owned fixture.
