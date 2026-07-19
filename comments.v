@@ -59,7 +59,7 @@ pub fn parse_comments_file_with_options(path string, options ParseOptions) !Comm
 
 // decode_comments decodes Prism serialized parse_comments bytes.
 fn decode_comments(source string, data []u8) !CommentsResult {
-	mut reader := serialize.new_reader(data)
+	mut reader := serialize.Reader.new(data)
 	header := serialize.read_header(mut reader)!
 	encoding := reader.read_string()!
 	start_line := reader.read_varsint()!

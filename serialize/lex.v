@@ -53,7 +53,7 @@ pub fn (result ParseLexResult) text(token Token) !string {
 
 // decode_lex decodes Prism serialized lexer bytes.
 pub fn decode_lex(source string, data []u8) !LexResult {
-	mut reader := new_reader(data)
+	mut reader := Reader.new(data)
 	tokens := read_serialized_tokens(mut reader)!
 	metadata := read_metadata(mut reader)!
 
@@ -70,7 +70,7 @@ pub fn decode_lex(source string, data []u8) !LexResult {
 
 // decode_parse_lex decodes Prism serialized tokens followed by a serialized AST.
 pub fn decode_parse_lex(source string, data []u8) !ParseLexResult {
-	mut reader := new_reader(data)
+	mut reader := Reader.new(data)
 	tokens := read_serialized_tokens(mut reader)!
 	parse := decode_parse_at(source, data, reader.position())!
 

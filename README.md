@@ -217,10 +217,18 @@ println(vprism.is_method_name('[]=')!)
 ## Single-file Analysis
 
 `analysis.Analyzer` provides higher-level structural information for one parsed
-source. Construct it through the root facade:
+source:
 
 ```v
+import vprism.analysis
+
 parsed := vprism.parse(source)!
+analyzer := analysis.Analyzer.new(parsed)
+```
+
+The root module also provides a convenience facade:
+
+```v
 analyzer := vprism.new_analyzer(parsed)
 ```
 

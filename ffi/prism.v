@@ -135,8 +135,8 @@ pub fn parse_success_with_options(source string, options []u8) !bool {
 
 	mut success := false
 
-	if !C.vprism_parse_success_with_options(&char(source.str), usize(source.len), &char(options.data),
-		&success) {
+	if !C.vprism_parse_success_with_options(&char(source.str), usize(source.len),
+		&char(options.data), &success) {
 		return native_error('Prism syntax check failed')
 	}
 
@@ -206,8 +206,8 @@ pub fn prettyprint_with_options(source string, options []u8) !string {
 
 	mut buffer := C.vprism_serialized_buffer_t{}
 
-	if !C.vprism_prettyprint_with_options(&char(source.str), usize(source.len), &char(options.data),
-		&buffer) {
+	if !C.vprism_prettyprint_with_options(&char(source.str), usize(source.len),
+		&char(options.data), &buffer) {
 		return native_error('Prism prettyprint failed')
 	}
 
@@ -227,14 +227,16 @@ pub fn string_query_local(value string, encoding string) !bool {
 
 // string_query_constant checks whether value is a valid Ruby constant name.
 pub fn string_query_constant(value string, encoding string) !bool {
-	result := C.vprism_string_query_constant(&char(value.str), usize(value.len), &char(encoding.str))
+	result := C.vprism_string_query_constant(&char(value.str), usize(value.len),
+		&char(encoding.str))
 
 	return query_result('Prism constant name query failed', value, encoding, result)
 }
 
 // string_query_method_name checks whether value is a valid Ruby method name.
 pub fn string_query_method_name(value string, encoding string) !bool {
-	result := C.vprism_string_query_method_name(&char(value.str), usize(value.len), &char(encoding.str))
+	result := C.vprism_string_query_method_name(&char(value.str), usize(value.len),
+		&char(encoding.str))
 
 	return query_result('Prism method name query failed', value, encoding, result)
 }
@@ -252,8 +254,8 @@ pub fn serialize_parse_with_options(source string, options []u8) ![]u8 {
 
 	mut buffer := C.vprism_serialized_buffer_t{}
 
-	if !C.vprism_serialize_parse_with_options(&char(source.str), usize(source.len), &char(options.data),
-		&buffer) {
+	if !C.vprism_serialize_parse_with_options(&char(source.str), usize(source.len),
+		&char(options.data), &buffer) {
 		return native_error('Prism parse serialization failed')
 	}
 
@@ -322,8 +324,8 @@ pub fn serialize_lex_with_options(source string, options []u8) ![]u8 {
 
 	mut buffer := C.vprism_serialized_buffer_t{}
 
-	if !C.vprism_serialize_lex_with_options(&char(source.str), usize(source.len), &char(options.data),
-		&buffer) {
+	if !C.vprism_serialize_lex_with_options(&char(source.str), usize(source.len),
+		&char(options.data), &buffer) {
 		return native_error('Prism lex serialization failed')
 	}
 

@@ -327,7 +327,7 @@ fn test_vprism_analysis_structure_fixture_checks_high_level_api() {
 // test_vprism_analysis_control_exception_fixture_checks_flow_api checks flow and exception APIs.
 fn test_vprism_analysis_control_exception_fixture_checks_flow_api() {
 	source := read_fixture('analysis', 'control_exception.rb')
-	analyzer := vprism.new_analyzer(vprism.parse(source)!)
+	analyzer := analysis.Analyzer.new(vprism.parse(source)!)
 	flows := analyzer.control_flows()
 	methods := analyzer.methods()
 	regions := analyzer.exception_regions()

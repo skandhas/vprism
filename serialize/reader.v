@@ -13,8 +13,8 @@ mut:
 	offset int
 }
 
-// new_reader creates a reader for Prism serialized bytes.
-pub fn new_reader(data []u8) Reader {
+// new creates a reader for Prism serialized bytes.
+pub fn Reader.new(data []u8) Reader {
 	return Reader{
 		data: data.clone()
 	}

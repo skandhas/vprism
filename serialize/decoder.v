@@ -18,7 +18,7 @@ pub fn decode_parse_at(source string, data []u8, start int) !ParseResult {
 		return error('serialized parse start is outside the buffer')
 	}
 
-	mut reader := new_reader(data)
+	mut reader := Reader.new(data)
 	reader.read_bytes(start)!
 
 	header := read_header(mut reader)!

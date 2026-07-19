@@ -9,8 +9,8 @@ pub struct Analyzer {
 	serialize.ParseResult
 }
 
-// new_analyzer creates an analyzer for a decoded Ruby source.
-pub fn new_analyzer(result serialize.ParseResult) Analyzer {
+// new creates an analyzer for a decoded Ruby source.
+pub fn Analyzer.new(result serialize.ParseResult) Analyzer {
 	return Analyzer{
 		ParseResult: result
 	}

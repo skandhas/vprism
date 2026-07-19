@@ -2,6 +2,7 @@ module main
 
 import os
 import vprism
+import vprism.analysis
 
 // main prints call nodes from a Ruby file or a small built-in snippet.
 fn main() {
@@ -10,7 +11,7 @@ fn main() {
 	} else {
 		'puts "hello"\nfoo(bar: 1)'
 	}
-	result := vprism.new_analyzer(vprism.parse(source)!)
+	result := analysis.Analyzer.new(vprism.parse(source)!)
 
 	for call in result.calls() {
 		println('${call.name}: ${call.text}')
